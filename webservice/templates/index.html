@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Blink Detector</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.min.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <h1 class="main-title">Authentication System</h1>
+    <p class="instructions" id="instructions">Please close your eyes for around 1 second and then open them.</p>
+    <video id="video" autoplay></video>
+    <h2 id="status">person: Unknown</h2>
+    <button id="connectButton">identify</button>
+    <script>
+        let socket;
+        let canSendFrame = true;
+        const connectButton = document.getElementById('connectButton');
+        const instructions = document.getElementById('instructions');
+        const status = document.getElementById('status');
+        
+        navigator.mediaDevices.getUserMedia({ video: true })
+        .then(stream => {
+            const video = document.getElementById('video');
+            video.srcObject = stream;
+
+            // Check the canSendFrame flag before sending
+            setInterval(() => {
+                if(canSendFrame && socket && socket.connected) {
+                    sendFrame();
+                }
+            }, 1000);
+        });
+        
+        connectButton.addEventListener('click', ()=> {
+            if (!socket || !socket.connected){
+                // Disable and change button text after connection
+                instructions.style.display = "block";
+                connectButton.innerText = "identifying...";
+                status.innerText = 'person: unknown'
+                connectButton.disabled = true;
+                socket = io.connect('http://' + document.domain + ':' + location.port);
+                console.log("connecting...")
+                
+                    
+                socket.on('blink_status', data => {
+                    console.log(data)
+                    status.innerText = `person: ${data.person}`;
+                    canSendFrame = true;  // Set the flag to true after receiving a response
+                    if (data.is_detected){
+                        instructions.style.display = "none";
+                        connectButton.innerText = "identify";
+                        connectButton.disabled = false;
+                        socket.disconnect();
+                    }
+                });
+            }
+        });
+
+        
+
+        function sendFrame() {
+            canSendFrame = false;  // Set the flag to false immediately after sending
+
+            const video = document.getElementById('video');
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0);
+            const dataURL = canvas.toDataURL('image/jpeg', 0.8);
+            const base64Image = dataURL.replace(/^data:image\/\w+;base64,/, '');
+
+            socket.emit('image', base64Image);
+        }
+    </script>
+</body>
+</html>
